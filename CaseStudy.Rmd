@@ -1,0 +1,324 @@
+---
+title: "CASE STUDY: Bellabeat Fitness App"
+subtitle: "Data Analytics Capstone"
+author: "Tim Klimchock"
+date: "01/16/2024"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+<p>&nbsp;</p>
+### OVERVIEW. 
+
+Bellabeat is a manufacturer of high-tech manufacturer of the health-focused app and smart products. 
+
+This study will analyze a sample of users who use the Bellabeat smartphone app. The purpose of this study is to identify trends in users daily activity to provide insight and guide Bellabeat's marketing strategy as they work to become a larger player in the
+global smart device market. The outcome of this analysis will give us insight to the current habits of app users and how they compare to the overall population that uses this app, represented in this data sample. The conclusion and recommendations, at the end of this study, will offer data driven decisions suggestions for application in marketing and development strategies. The goal of the gained insight and suggestions is the maximization of customer retention, new subscriber acquisition, and consistent daily usage of Bellabeat's subscription based membership. 
+
+##### Key Stakeholders
+* Urška Sršen: Bellabeat’s cofounder and Chief Creative Officer.
+* Sando Mur: Mathematician and Bellabeat’s cofounder; key member of the Bellabeat executive team. 
+
+##### Business overview
+In 2013, Urška Sršen and Sando Mur founded Bellabeat, a high-tech company that manufactures health-focused smart products. Sršen used her background as an artist to develop technology that informs users by collecting data on daily activity and sleep. Since it was founded, Bellabeat has grown rapidly and quickly positioned itself as a tech-driven wellness company. 
+
+##### Business task
+Sršen has asked the marketing analytics team to focus on the Bellabeat smart phone app and analyze app usage in order to gain insight into how users are already using the app. Using this information, Sršen would like high-level recommendations for how these trends can inform Bellabeat marketing strategy.
+
+Urška Sršen (Cofounder and CCO) points us to use “FitBit Fitness Tracker Data” dataset available on Kaggle. This data provides a sample of FitBit user data. All users in this sample consented to the submission of personal tracker data.
+
+Sršen has acknowledged this data set may contain limitations. Through our analysis we will identify data limitations and communicate these in our observations. 
+
+To perform our analysis, we will be exporting the data tables from Kaggle and will use RStudio to clean, transform, and analyze the data.
+
+### ASK. 
+1.) What activity trends can we indentify from this sample? 
+
+2.) What daily and/or hourly trends does the data provide? 
+
+3.) How can the trends we identified be used to positivly influence Bellbeat's marketing strategy?  
+
+### DATA PREPARATION. 
+```{r}
+# Load libraries
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(lubridate))
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(psych))
+suppressPackageStartupMessages(library(data.table))
+```
+
+
+```{r}
+# Read data
+d.act <- read.csv("dailyActivity_merged.csv")
+d.step <- read.csv("dailySteps_merged.csv")
+h.step <- read.csv("hourlySteps_merged.csv")
+d.sleep <- read.csv("sleepDay_merged.csv")
+```
+
+
+```{r}
+# Inspect data structure
+str(d.act)
+str(d.step)
+str(h.step)
+str(d.sleep)
+```
+
+
+```{r}
+# Identify NA values
+sum(is.na(d.act))
+sum(is.na(d.step))
+sum(is.na(h.step))
+sum(is.na(d.sleep))
+```
+
+
+```{r}
+# Identify duplicate values
+sum(duplicated(d.act))
+sum(duplicated(d.step))
+sum(duplicated(h.step))
+sum(duplicated(d.sleep))
+```
+
+
+```{r}
+# Identify unique user Ids in each data set to determine sample size 
+n_distinct(d.act$Id)
+n_distinct(d.step$Id)
+n_distinct(h.step$Id)
+n_distinct(d.sleep$Id)
+```
+
+* Data obtained for dailyActivity, dailySteps, and hourlySteps consisted of a sample size of 33 users. 
+
+* Data obtained for sleepDay consisted of a sample size of 24 users. 
+
+### DATA PROCESSING. 
+
+#### Data Cleaning
+
+
+```{r}
+# Remove duplicate values
+d.sleep <- d.sleep %>%
+    distinct()
+
+sum(duplicated(d.sleep))
+```
+
+
+```{r}
+# Format dates from chr to date/time, clean and rename date columns
+
+# Rename
+colnames(d.act)[2] = "date"
+# Format as date
+d.act$date <- as.POSIXct(d.act$date, format = "%m/%d/%Y")
+
+# Rename
+colnames(d.step)[2] = "date"
+# Format as date
+d.step$date <- as.POSIXct(d.step$date, format = "%m/%d/%Y")
+
+# Seperate date and hour into two columns, rename
+h.step_split <- h.step %>% separate(ActivityHour, c("date", "step_hour"), sep = "^\\S*\\K")
+h.step_split$date <- as.POSIXct(h.step_split$date, format = "%m/%d/%Y")
+
+# Remove 12am time stamp from each observation, time stamp is not relevant in this data set
+d.sleep$SleepDay <- (gsub('12:00:00 AM', '', d.sleep$SleepDay))
+# Rename
+colnames(d.sleep)[2] = "date"
+# Format as date
+d.sleep$date <- as.POSIXct(d.sleep$date, format = "%m/%d/%Y")
+```
+
+
+```{r}
+# Convert Id columns to chr
+d.act$Id <- as.character(d.act$Id)
+d.step$Id <- as.character(d.step$Id)
+h.step$Id <- as.character(h.step$Id)
+d.sleep$Id <- as.character(d.sleep$Id)
+```
+
+
+```{r}
+# Verify format in data structures
+str(d.act)
+str(d.step)
+str(h.step)
+str(d.sleep)
+```
+
+### ANALYZE. 
+
+
+```{r}
+# Descriptive statistics summary 
+
+# Summary of TotalSteps, Calories, and Activity Minutes
+d.act %>%
+    select(TotalSteps, Calories, SedentaryMinutes, LightlyActiveMinutes, 
+           FairlyActiveMinutes, VeryActiveMinutes) %>%
+    summary()
+```
+
+```{r}
+# Identify which hours of the day users, on average, take the most steps. 
+hourlymeanstep <- h.step_split %>%
+  group_by(step_hour) %>%
+  summarize(mean.step = mean(StepTotal)) %>% 
+  arrange(desc(mean.step))
+
+print.data.frame(hourlymeanstep)
+```
+
+### DATA VISUALIZATION. 
+
+```{r}
+# Plot average steps per hour of day
+ggplot(hourlymeanstep, aes(x = step_hour, y = mean.step )) +
+  geom_col(aes(reorder(step_hour, +mean.step ), mean.step)) +
+  theme(axis.text.x = element_text(angle = 45)) + 
+  labs(title = "Average Steps per Hour", x = "Hour", y = "Average Steps")
+```
+
+```{r}
+# Plot actual total daily steps v actual daily calories
+stepvcal <- ggplot(data = d.act) +
+  geom_point(mapping = aes(x=TotalSteps, y=Calories,color=TotalSteps)) +
+  geom_point(mapping = aes(x=TotalSteps, y=Calories,color=TotalSteps)) +
+  geom_point(mapping = aes(x=TotalSteps, y=Calories,color=TotalSteps)) +
+  geom_point(mapping = aes(x=TotalSteps, y=Calories,color=TotalSteps)) +
+  geom_smooth(mapping = aes(x=TotalSteps, y=Calories))
+stepvcal
+```
+
+```{r}
+# Plot and compare average total activity minutes per day and average minutes spent in each activity intensity. 
+d.act %>%
+  select(TotalSteps, Calories, SedentaryMinutes, LightlyActiveMinutes, 
+         FairlyActiveMinutes, VeryActiveMinutes) %>%
+  summary()
+
+# Assign day of week order
+day_order <- c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+
+# Subset time spent in daily intensity, group by day of week
+groupeddailyintensity <- d.act %>%
+  mutate(Day = factor(weekdays(date), levels = day_order)) %>%
+  group_by(Day) %>%
+  summarise(mean_sedentary = mean(SedentaryMinutes),
+            mean_light = mean(LightlyActiveMinutes),
+            mean_fair = mean(FairlyActiveMinutes),
+            mean_active = mean(VeryActiveMinutes))
+
+ggplot(data = groupeddailyintensity) +
+  geom_bar(mapping = aes(x = Day, y = mean_sedentary, fill = 'Sedentary'), stat = 'identity', position = 'dodge') +
+  geom_bar(mapping = aes(x = Day, y = mean_light, fill = 'Lightly Active'), stat = 'identity', position = 'dodge') +
+  geom_bar(mapping = aes(x = Day, y = mean_active , fill = 'Very Active'), stat = 'identity', position = 'dodge') +
+  geom_bar(mapping = aes(x = Day, y = mean_fair , fill = 'Fairly Active'), stat = 'identity', position = 'dodge') +
+  labs(title = "Intensity Activity Minutes", x = "Week Day", y = "Activity Intensity Minutes") 
+```
+
+```{r}
+# Plot average minutes asleep for each user. 
+mean.sleep <-d.sleep %>%
+  group_by(Id) %>%
+  summarize(mean.sleep = mean(TotalMinutesAsleep)) %>%
+  select(Id, mean.sleep) %>%
+  arrange(mean.sleep) %>%
+  as.data.frame()
+
+mean.sleep %>% 
+  arrange(desc(mean.sleep)) %>% 
+  summary()
+
+ggplot(mean.sleep, aes(x = Id, y = mean.sleep)) +
+  geom_col(aes(reorder(Id, +mean.sleep), y = mean.sleep)) +
+  labs(title = "Average Time Asleep (Minutes)", x = "Id", y = "Minutes") +
+  theme(axis.text.x = element_text(angle = 45)) +
+  geom_hline(yintercept = mean(mean.sleep$mean.sleep), color = "red")
+```
+
+### SUMMARY.
+
+#### User Activity
+
+* The average daily steps for users in this sample is 7,638, 23.6% lower than the daily recommended steps of 10,000.
+
+* The average time spent in each intensity level: 
+  + Sedentary minutes logged: 991.2 minutes or 16.5 hours per day. 
+  + Lightly active minutes logged: 192.8 minutes or 3.2 hours per day. 
+  + Fairly active minutes logged: 13.6 minutes per day. 
+  + Very active minutes logged: 21.2 minutes per day. 
+<p>&nbsp;</p>
+* Amount of day spent idle/sedentary: 81.3%
+* Amount of day spent lightly active: 15.8%
+
+* Among users, the average steps per hour 
+
+* The hours with the highest steps on average in this sample:
+  + 6pm: 599 steps
+  + 7pm: 583 steps
+  + 5pm: 550 steps
+  + 12pm: 548 steps
+  + 2pm: 540 steps
+  + 1pm: 538 steps
+<p>&nbsp;</p>
+* The mean daily calories for users in this sample is 2,304. 
+
+* The mean daily sedentary minutes of all users is 991 minutes, or 16.5 hours. 
+
+* The average minutes spent asleep per user is 377.4 minutes or 6.3 hours. 
+
+#### Data Limitations
+1. A sample size of 33 users is not large enough of a sample to confidently conclude and provide insights that represent all FitBit users. 
+2. The dataset contains data from a one month period in 2016 only. To provide a more accurate and relevant analysis of activity and usage trends, we would prefer data for the current year in addition to historic data. The data should be collected for the entire year to accurately identify and account for variables, such as seasonality, that could contribute to outliers in our observations. 
+3. This data from this user sample lack user demographics. In a future analysis, it would be beneficial to gather information such as gender, age, and location. Through the use of user demographics, we can gain more in depth insights that allow our stakeholders to make better data driven decisions and market our product to address and solve the specific needs for various demographic groups. 
+4. A fourth limitation found in this data set is the criteria used to group activity time into the categories of “Sedentary”, “Lightly Active”, Fairly Active”, and “Very Active”. In a future analysis it would be beneficial to provide the criteria used, or to exclude these categories entirely, allowing the analyst to tailor the grouping of activity levels to the observations obtained. 
+5. An early observation of the user weight table shows that it consists of eight participants. Because this sample size is small, we will not be able to develop any reliable conclusions and will be dropping this table from our study. 
++ To address this limitation, Bellabeat should increase the marketing of the weight tracking features within their app and promote the benefits users can obtain by tracking their weight progress. 
+
+### CONCLUSION AND RECOMENDATIONS TO ENHANCE APP USAGE. 
+* Observation: The hours with the three highest average daily steps were 5pm, 6pm, and 7pm. (Afternoon/Early evening)
+* Observation: The hours with the second highest average daily steps: 12pm, 1pm, and 2pm. (Lunchtime/Early afternoon)
+* Observation: There is a positive correlation among total daily steps taken and calories burned. 
+
+##### RECOMENDATIONS. 
+1.) Create personalized notifications for each user.
+
+* Notifications will remind the user 30 minutes prior to the the time of day that the user historically takes the most steps. Reminding the user prior to their usual workout time can provide positive encouragement and motive the user to fulfill their fitness goal.
+
+
+2.) The data tables in this sample did not provide data of users daily caloric intake/calorie counting.
+
+* Implementing a calorie intake feature would provide users a way to track their fitness goals in one central location. Offering a new subscriber campaign for the roll out of the calorie counting feature will attract new users and promote customer retention.
+
+
+3.) Implement daily challenges and a score systems. 
+
+* Daily challenges should occur throughout the day for each user. Challenges will keep the user engaged and cognizant of their daily health and long term fitness goals. 
+* Gamification of app features (step tracking, distance tracking, activity intensity level monitoring) can be achieved by incorporating a scoring system into the user's daily experience. Users will be able to earn points that correspond to their amount of physical activity completed throughout the day. 
+* Similarly to the daily challenges, a daily and overall wellness score that must be earned, will keep users engaged in the app at all times throughout the day. By staying engaged and motivated in their personal progress, users will be encouraged to stay on track and meet their personal goals. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
