@@ -3,11 +3,7 @@ title: "CASE STUDY: Bellabeat Fitness App"
 subtitle: "Data Analytics Capstone"
 author: "Tim Klimchock"
 date: "01/16/2024"
-output:
-  html_document:
-    toc: true
-    toc_float: true
-    theme: "cerulean"
+output: rmarkdown::github_document
 ---
 
 ```{r setup, include=FALSE}
